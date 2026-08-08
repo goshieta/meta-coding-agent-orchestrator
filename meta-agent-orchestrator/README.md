@@ -4,7 +4,7 @@
 [pi](https://github.com/earendil-labs/pi-coding-agent) のセッション・コンテクスト・品質を自律管理し、
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
-> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理: Config）完了。
+> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -42,6 +42,20 @@ uv run python -m orchestrator
 uv run pytest tests/
 ```
 
+　
+
+## 起動（ワンライナー）
+
+```bash
+./run-spec.sh <spec.md> [existing_repo/] [options]
+```
+
+- `spec.md`: 仕様書（必須。存在・非空を検証）
+- `existing_repo/`: 既存リポジトリ（任意）
+- オプション: `--orchestrator-model` / `--exec-model` / `--qa-model` / `--survey-model` / `--github-token` / `--log-dir`
+
+仕様書未指定・不存在・空ファイルの場合はエラーメッセージを出して即終了（exit 非0）します。
+
 ## 設定（環境変数）
 
 全設定は**環境変数 > デフォルト値**、CLI 引数 > 環境変数の優先順位で外部から制御できます（Task 3 で CLI 引数が接続されます）。
@@ -70,7 +84,9 @@ meta-agent-orchestrator/
 │   ├── __init__.py
 │   ├── __main__.py           # python -m orchestrator の入口
 │   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
-│   └── main.py               # 最小 CLI エントリポイント（Task 1）
+│   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
+│   └── main.py               # CLI への薄い委譲エントリ
+├── run-spec.sh               # ワンライナー起動（Task 3）
 └── tests/                    # テスト（Task 1 はダミー）
 ```
 
@@ -80,7 +96,7 @@ meta-agent-orchestrator/
 
 - [x] Task 1: プロジェクト雛形・環境構築
 - [x] Task 2: 設定管理（Config）×外部化
-- [ ] Task 3: CLI エントリポイントと仕様書検証
+- [x] Task 3: CLI エントリポイントと仕様書検証
 - [ ] Task 4: pi 連携 CrewAI Tool 群
 - [ ] Task 5: ワークスペース・共有ボード・状態管理
 - [ ] Task 6: コンテクスト構築（新規・既存）

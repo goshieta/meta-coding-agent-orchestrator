@@ -1,7 +1,4 @@
-"""Task 1: プロジェクト雛形のダミーテスト。
-
-後続タスクで各モジュールの本格的なテストに置き換え・拡張される。
-"""
+"""Task 1: プロジェクト雛形の基礎確認テスト。"""
 
 from __future__ import annotations
 
@@ -12,9 +9,11 @@ def test_package_importable() -> None:
     assert orchestrator.__version__ is not None
 
 
-def test_main_greets(capsys) -> None:
+def test_main_entrypoint_help() -> None:
+    """python -m orchestrator --help が正常にヘルプを表示して終了する。"""
     from orchestrator.main import main
+    import pytest
 
-    assert main([]) == 0
-    captured = capsys.readouterr()
-    assert "Meta-Agent Orchestrator" in captured.out
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
+    assert excinfo.value.code == 0
