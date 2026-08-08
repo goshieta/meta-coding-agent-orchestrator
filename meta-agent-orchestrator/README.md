@@ -5,7 +5,7 @@
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
 > **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
-> Task 4（pi 連携 CrewAI Tool 群）完了。
+> Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -44,6 +44,34 @@ uv run pytest tests/
 ```
 
 　
+
+## ワークスペース・共有ボード・状態管理（Task 5）
+
+実装・計画ループの共通基盤。作業ディレクトリを一元管理し、共有ボード・
+タスク別ログ・pi セッションの永続化を担います。
+
+- **共有ボード `plan.md`**: タスク一覧・状態・依存・優先度を人間向けに描画。
+- **状態 `state.json`**: 機械可読な状態（冪等性の要）。再起動時に読み込んで進行を復元。
+- **タスク別ログ**: `logs/<task_id>.log` にタイムスタンプ付きで追記。
+- **pi セッション**: `--session` / `/export` の JSONL を `sessions/` へ永続化し、
+  再起動時に復元（冪等性）。
+
+**状態遷移**: `planned → running → done / failed → qa → accepted / failed`
+（`failed` は再実行 `running` / 再計画 `planned` へ。`accepted` は終端・QA 通過）。
+不正な遷移は `ValueError` で検出します。
+
+```python
+from orchestrator import Workspace, TaskStatus
+
+ws = Workspace.open("work/")
+t = ws.add_task("機能Aを実装")
+ws.transition(t.id, TaskStatus.RUNNING)   # planned → running
+ws.log(t.id, "プロンプト送信")
+ws.set_session(t.id, "pi-session-123")
+ws.persist_session(t.id, "/tmp/sessions/abc.jsonl")  # JSONL 永続化
+
+# 再起動時: Workspace.open("work/") で前回の状態・セッションを復元
+```
 
 ## pi 連携 CrewAI Tool 群（Task 4）
 
@@ -117,9 +145,10 @@ meta-agent-orchestrator/
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   └── pi_tools.py       # pi 連携 CrewAI Tool 群（Task 4）
+│   ├── workspace.py          # 共有ボード・ログ・セッション状態管理（Task 5）
 │   └── main.py               # CLI への薄い委譲エントリ
 ├── run-spec.sh               # ワンライナー起動（Task 3）
-└── tests/                    # テスト（Task 1 はダミー）
+└── tests/                    # テスト（Task 1〜）
 ```
 
 > 構成は PLAN.md / TASK.md に沿って後続タスクで拡張されます。
@@ -130,7 +159,7 @@ meta-agent-orchestrator/
 - [x] Task 2: 設定管理（Config）×外部化
 - [x] Task 3: CLI エントリポイントと仕様書検証
 - [x] Task 4: pi 連携 CrewAI Tool 群
-- [ ] Task 5: ワークスペース・共有ボード・状態管理
+- [x] Task 5: ワークスペース・共有ボード・状態管理
 - [ ] Task 6: コンテクスト構築（新規・既存）
 - [ ] Task 7: コンテナ隔離実行
 - [ ] Task 8: CrewAI エージェント群とクルー構成
