@@ -4,7 +4,7 @@
 [pi](https://github.com/earendil-labs/pi-coding-agent) のセッション・コンテクスト・品質を自律管理し、
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
-> **ステータス**: 実装初期段階（Task 1: プロジェクト雛形・環境構築完了）。
+> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理: Config）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -42,6 +42,24 @@ uv run python -m orchestrator
 uv run pytest tests/
 ```
 
+## 設定（環境変数）
+
+全設定は**環境変数 > デフォルト値**、CLI 引数 > 環境変数の優先順位で外部から制御できます（Task 3 で CLI 引数が接続されます）。
+
+| 環境変数 | 役割 | デフォルト |
+| --- | --- | --- |
+| `AGENT_ORCHESTRATOR_MODEL` | オーケストレータ（コスパ系） | `deepseek/deepseek-chat` |
+| `AGENT_EXEC_MODEL` | 実行インターフェーサー（中〜高性能） | `anthropic/claude-sonnet-4-5` |
+| `AGENT_QA_MODEL` | QA クリティック（高性能） | `anthropic/claude-opus-4-1` |
+| `AGENT_SURVEY_MODEL` | 調査エージェント（コスパ系） | `deepseek/deepseek-chat` |
+| `GITHUB_TOKEN` | GitHub 認証トークン | なし |
+| `PI_SESSION_DIR` | pi セッション保存ディレクトリ | なし |
+| `PI_PROVIDER` | pi のプロバイダ | `openrouter` |
+| `PI_THINKING` | pi の thinking 有効/無効 | `true` |
+| `PI_TRUST` | pi の trust 制御 | `defaultProjectTrust` |
+
+> モデル ID は PLAN の保留事項のため調整可能なプレースホルダです。すべて外部設定で上書きできます。
+
 ## ディレクトリ構成
 
 ```
@@ -51,6 +69,7 @@ meta-agent-orchestrator/
 ├── src/orchestrator/
 │   ├── __init__.py
 │   ├── __main__.py           # python -m orchestrator の入口
+│   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
 │   └── main.py               # 最小 CLI エントリポイント（Task 1）
 └── tests/                    # テスト（Task 1 はダミー）
 ```
@@ -59,8 +78,8 @@ meta-agent-orchestrator/
 
 ## ロードマップ
 
-- [ ] Task 1: プロジェクト雛形・環境構築（**本タスク**）
-- [ ] Task 2: 設定管理（Config）×外部化
+- [x] Task 1: プロジェクト雛形・環境構築
+- [x] Task 2: 設定管理（Config）×外部化
 - [ ] Task 3: CLI エントリポイントと仕様書検証
 - [ ] Task 4: pi 連携 CrewAI Tool 群
 - [ ] Task 5: ワークスペース・共有ボード・状態管理
