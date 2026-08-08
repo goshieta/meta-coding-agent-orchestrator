@@ -4,7 +4,8 @@
 [pi](https://github.com/earendil-labs/pi-coding-agent) のセッション・コンテクスト・品質を自律管理し、
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
-> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）完了。
+> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
+> Task 4（pi 連携 CrewAI Tool 群）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -43,6 +44,34 @@ uv run pytest tests/
 ```
 
 　
+
+## pi 連携 CrewAI Tool 群（Task 4）
+
+マネジメント層（CrewAI）は本 Tool 経由でのみ pi プロセスを操作します。
+**Manager-only 原則**に従い、エージェントはコードへ直接アクセスせず、常に pi を駆動して作業します。
+
+- `run_pi_single` : `pi -p @spec.md "タスク"` のワンショット実行（新規タスク）
+- `run_pi_continue` : `pi -c` / `--session <id>` によるセッション継続
+- `run_pi_fork` : `pi --fork <id>` で新セッション生成（失敗・再実行時）
+- `compact_context` : コンテクスト圧縮（`/compact` 相当）の指示を送信
+- `export_session` : セッション（JSONL）の永続化
+
+各 Tool は `OrchestratorConfig` から `--provider` / `--model` / `--thinking` / trust 制御
+（`--approve` 等）を付与します。実行結果は自然言語レポート＋**exit code** として返り、
+オーケストレータが消費します。
+
+```python
+from orchestrator.config import build_config
+from orchestrator.tools import build_pi_tools
+
+config = build_config()                 # 環境変数 / CLI 引数から設定を解決
+tools = build_pi_tools(config)          # pi 連携 Tool 一式を生成
+tools[0].run("実装してください")        # run_pi_single で pi を実行
+```
+
+> **ノート（headless 運用）**: pi の `/compact` / `/export` は対話型 TUI のスラッシュコマンドのため、
+> 非対話（`-p`）オーケストレーションではそれぞれ「圧縮指示プロンプトの送信」「セッション JSONL の
+> 永続コピー」で代替しています。
 
 ## 起動（ワンライナー）
 
@@ -85,6 +114,9 @@ meta-agent-orchestrator/
 │   ├── __main__.py           # python -m orchestrator の入口
 │   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
 │   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   └── pi_tools.py       # pi 連携 CrewAI Tool 群（Task 4）
 │   └── main.py               # CLI への薄い委譲エントリ
 ├── run-spec.sh               # ワンライナー起動（Task 3）
 └── tests/                    # テスト（Task 1 はダミー）
@@ -97,7 +129,7 @@ meta-agent-orchestrator/
 - [x] Task 1: プロジェクト雛形・環境構築
 - [x] Task 2: 設定管理（Config）×外部化
 - [x] Task 3: CLI エントリポイントと仕様書検証
-- [ ] Task 4: pi 連携 CrewAI Tool 群
+- [x] Task 4: pi 連携 CrewAI Tool 群
 - [ ] Task 5: ワークスペース・共有ボード・状態管理
 - [ ] Task 6: コンテクスト構築（新規・既存）
 - [ ] Task 7: コンテナ隔離実行
