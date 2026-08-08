@@ -20,7 +20,10 @@ from orchestrator.tools import (
     RunPiContinueTool,
     RunPiForkTool,
     RunPiSingleTool,
+    RunPiSurveyTool,
+    SURVEY_TOOLS,
     build_pi_tools,
+    make_survey_tool,
     pi_available,
 )
 from orchestrator.tools import pi_tools as pt
@@ -43,6 +46,7 @@ def test_build_pi_tools_returns_expected_tools() -> None:
         "run_pi_fork",
         "compact_context",
         "export_session",
+        "run_pi_survey",
     }
 
 
@@ -54,6 +58,7 @@ def test_expected_tool_classes_exist() -> None:
     assert isinstance(by_name["run_pi_fork"], RunPiForkTool)
     assert isinstance(by_name["compact_context"], CompactContextTool)
     assert isinstance(by_name["export_session"], ExportSessionTool)
+    assert isinstance(by_name["run_pi_survey"], RunPiSurveyTool)
 
 
 def test_pi_available_is_bool() -> None:
@@ -135,6 +140,58 @@ def test_session_dir_flag_when_configured() -> None:
 def test_model_override_flag() -> None:
     cmd = pt.build_single_cmd(DEFAULT_CFG, "t", model="qa-model")
     assert "qa-model" in cmd
+
+
+def test_survey_cmd_uses_readonly_allowlist() -> None:
+    cmd = pt.build_survey_cmd(DEFAULT_CFG, "調査して")
+    assert "--tools" in cmd
+    idx = cmd.index("--tools")
+    assert cmd[idx + 1] == ",".join(SURVEY_TOOLS)
+    assert cmd[-1] == "調査して"
+    assert "-p" in cmd
+    # 読み取り専用ツールのみ（存在しないツールを許可しない）
+    assert set(SURVEY_TOOLS) <= {"read", "grep", "find", "ls"}
+
+
+def test_survey_cmd_injects_model_and_trust() -> None:
+    cfg = OrchestratorConfig(exec_model="survey-model", pi_trust="approve")
+    cmd = pt.build_survey_cmd(cfg, "調査")
+    joined = " ".join(cmd)
+    assert "survey-model" in joined
+    assert "--approve" in joined
+
+
+def test_run_pi_survey_tool_readonly() -> None:
+    """run_pi_survey は cwd=repo かつ読み取り専用 tools で実行される。"""
+    captured = {}
+
+    def fake_run(argv, cwd=None, timeout=3600):
+        captured["argv"] = argv
+        captured["cwd"] = cwd
+        return {"returncode": 0, "stdout": "現状レポート本文", "stderr": ""}
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(pt, "_run_pi", fake_run)
+    tool = make_survey_tool(DEFAULT_CFG, repo_dir="/repo")
+    report = tool._run("調査して")
+    assert "現状レポート本文" in report
+    args = captured["argv"]
+    assert args[args.index("--tools") + 1] == ",".join(SURVEY_TOOLS)
+    assert captured["cwd"] == "/repo"
+    monkeypatch.undo()
+
+
+def test_survey_tool_failure_includes_error() -> None:
+    def fake_run(argv, cwd=None, timeout=3600):
+        return {"returncode": 1, "stdout": "", "stderr": "survey failed"}
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(pt, "_run_pi", fake_run)
+    tool = make_survey_tool(DEFAULT_CFG)
+    report = tool._run("調査")
+    assert "exit code: 1" in report
+    assert "survey failed" in report
+    monkeypatch.undo()
 
 
 # ---------------------------------------------------------------------------

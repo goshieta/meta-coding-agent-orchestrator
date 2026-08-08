@@ -5,7 +5,8 @@
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
 > **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
-> Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）完了。
+> Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
+> Task 6（コンテクスト構築：新規・既存）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -83,6 +84,7 @@ ws.persist_session(t.id, "/tmp/sessions/abc.jsonl")  # JSONL 永続化
 - `run_pi_fork` : `pi --fork <id>` で新セッション生成（失敗・再実行時）
 - `compact_context` : コンテクスト圧縮（`/compact` 相当）の指示を送信
 - `export_session` : セッション（JSONL）の永続化
+- `run_pi_survey` : 読み取り専用ツール（`--tools read,grep,find,ls`）で既存コードを調査（F-10）
 
 各 Tool は `OrchestratorConfig` から `--provider` / `--model` / `--thinking` / trust 制御
 （`--approve` 等）を付与します。実行結果は自然言語レポート＋**exit code** として返り、
@@ -100,6 +102,35 @@ tools[0].run("実装してください")        # run_pi_single で pi を実行
 > **ノート（headless 運用）**: pi の `/compact` / `/export` は対話型 TUI のスラッシュコマンドのため、
 > 非対話（`-p`）オーケストレーションではそれぞれ「圧縮指示プロンプトの送信」「セッション JSONL の
 > 永続コピー」で代替しています。
+
+## コンテクスト構築（新規・既存）（Task 6）
+
+`context.py` は仕様書を起点に、タスク分解に必要な**初期コンテクスト**を構築します。
+生成物はワークスペースの `context/` ディレクトリへ保存され、後続の計画（Task 8）・実装（Task 9）が参照します。
+
+- **新規**（`existing_repo` なし）: 仕様書を pi 初期プロンプトとして投入するための自己完結型コンテクスト
+  （`context/initial_prompt.md`）を構築。`pi @spec.md "..."` の形で pi に渡せる。
+- **既存**（`existing_repo` あり）: 調査エージェントが **pi 読み取り専用ツール**（`--tools read,grep,find,ls`）
+  経由でコードベースを解析し、**現状レポート**（`context/survey_report.md`）を生成。
+  オーケストレータが自然言語で参照できる。
+- 仕様書のコピー（`context/spec.md` / `context/context.json` メタ情報）も保存。
+
+```python
+from orchestrator import Workspace
+from orchestrator.config import build_config
+from orchestrator.context import build_context, ContextResult
+
+ws = Workspace.open("work/")
+config = build_config()
+result: ContextResult = build_context(
+    "spec.md", ws, config, repo_path="existing/"  # 既存案件時のみ
+)
+print(result.describe())          # 新規/既存どちらの経路か・保存先
+print(result.survey_report)       # 既存経路の現状レポート（自然言語）
+```
+
+> **Manager-only 原則**: 既存コードの調査も含め、マネジメント層は常に pi（読み取り専用 Tool）を介してのみ
+> コードへアクセスします。読み取り専用のため調査中にリポジトリを書き換えることはありません。
 
 ## 起動（ワンライナー）
 
@@ -142,6 +173,7 @@ meta-agent-orchestrator/
 │   ├── __main__.py           # python -m orchestrator の入口
 │   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
 │   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
+│   ├── context.py            # コンテクスト構築（新規・既存）（Task 6）
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   └── pi_tools.py       # pi 連携 CrewAI Tool 群（Task 4）
@@ -160,7 +192,7 @@ meta-agent-orchestrator/
 - [x] Task 3: CLI エントリポイントと仕様書検証
 - [x] Task 4: pi 連携 CrewAI Tool 群
 - [x] Task 5: ワークスペース・共有ボード・状態管理
-- [ ] Task 6: コンテクスト構築（新規・既存）
+- [x] Task 6: コンテクスト構築（新規・既存）
 - [ ] Task 7: コンテナ隔離実行
 - [ ] Task 8: CrewAI エージェント群とクルー構成
 - [ ] Task 9: 実装ループ

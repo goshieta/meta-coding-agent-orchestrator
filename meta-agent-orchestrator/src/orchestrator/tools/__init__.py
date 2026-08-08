@@ -18,16 +18,22 @@ from orchestrator.tools.pi_tools import (
     RunPiContinueTool,
     RunPiForkTool,
     RunPiSingleTool,
+    RunPiSurveyTool,
+    SURVEY_TOOLS,
     build_pi_tools,
+    make_survey_tool,
     pi_available,
 )
 
 __all__ = [
     "build_pi_tools",
+    "make_survey_tool",
     "pi_available",
     "RunPiSingleTool",
     "RunPiContinueTool",
     "RunPiForkTool",
+    "RunPiSurveyTool",
     "CompactContextTool",
     "ExportSessionTool",
+    "SURVEY_TOOLS",
 ]

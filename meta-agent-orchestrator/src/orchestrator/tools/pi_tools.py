@@ -10,6 +10,7 @@ Tool 群。実行の実体は常に pi であり、マネジメント層エー�
     - ``run_pi_fork``     : ``pi --fork <id>`` で新セッション生成（失敗・再実行時）
     - ``compact_context`` : セッションへコンテクスト圧縮（/compact 相当）の指示を送る
     - ``export_session``  : セッション（JSONL）を永続化する
+    - ``run_pi_survey``   : 読み取り専用ツール（--tools read,grep,find,ls）で既存コードを解析（F-10）
 
 各 Tool は :class:`orchestrator.config.OrchestratorConfig` から、provider / model /
 thinking / trust 制御（--approve 等）を pi のコマンドへ付与する。
@@ -46,6 +47,9 @@ PI_COMMAND = "pi"
 _THINKING_LEVEL_ON = "high"
 _THINKING_LEVEL_OFF = "off"
 
+# 調査（既存コード把握 F-10）で pi に許可する読み取り専用ツールの allowlist
+SURVEY_TOOLS: tuple[str, ...] = ("read", "grep", "find", "ls")
+
 # 非0終了コードとして返す擬似コード（pi が起動できなかった場合など）
 RC_NOT_FOUND = -127
 RC_TIMEOUT = -124
@@ -65,13 +69,24 @@ def _pi_bin() -> str:
     return shutil.which(PI_COMMAND) or PI_COMMAND
 
 
-def _pi_common_flags(config: OrchestratorConfig) -> list[str]:
-    """provider / session-dir / trust 制御の共通フラグを構築する。"""
+def _pi_tools_flag(tools: list[str] | tuple[str, ...] | None) -> list[str]:
+    """`--tools` の allowlist フラグを構築する（指定時のみ）。
+
+    読み取り専用ツール（SURVEY_TOOLS 等）で pi を制限実行するために使う。
+    """
+    if not tools:
+        return []
+    return ["--tools", ",".join(tools)]
+
+
+def _pi_common_flags(config: OrchestratorConfig, tools: list[str] | tuple[str, ...] | None = None) -> list[str]:
+    """provider / session-dir / trust /（任意）tools allowlist の共通フラグを構築する。"""
     flags: list[str] = []
     if config.pi_provider:
         flags += ["--provider", config.pi_provider]
     flags += _pi_session_dir_flags(config)
     flags += _pi_trust_flags(config)
+    flags += _pi_tools_flag(tools)
     return flags
 
 
@@ -172,6 +187,25 @@ def build_fork_cmd(
     cmd += _pi_common_flags(config)
     cmd += _print_arg()
     cmd += ["--fork", session, task]
+    return cmd
+
+
+def build_survey_cmd(
+    config: OrchestratorConfig,
+    prompt: str,
+    model: str | None = None,
+    thinking: bool | None = None,
+) -> list[str]:
+    """読み取り専用ツールで既存コードを調査する ``pi -p --tools read,grep,find,ls`` コマンドを構築する。
+
+    実行時は ``cwd`` を調査対象リポジトリへ指定すること（Manager-only 原則：
+    pi が read / grep / find / ls 経由でのみコードへアクセスする）。
+    """
+    cmd = [_pi_bin()]
+    cmd += _pi_model_flags(config, model, thinking)
+    cmd += _pi_common_flags(config, tools=SURVEY_TOOLS)
+    cmd += _print_arg()
+    cmd += [prompt]
     return cmd
 
 
@@ -400,6 +434,27 @@ class CompactContextTool(BaseTool):
         return _format_report(cmd, result)
 
 
+class RunPiSurveyTool(BaseTool):
+    """読み取り専用ツールで既存コードベースを調査・現状把握する Tool（F-10）。"""
+
+    name: str = "run_pi_survey"
+    description: str = (
+        "Survey / analyze an EXISTING codebase in READ-ONLY mode by running pi with a "
+        "restricted tool allowlist (`--tools read,grep,find,ls`). Use to understand the current "
+        "state of an existing repository and produce a status report (F-10). No write/bash "
+        "tools are permitted, so it cannot modify anything. Returns a natural-language report "
+        "with the exit code."
+    )
+
+    _config: OrchestratorConfig = PrivateAttr(default_factory=OrchestratorConfig)
+    _repo_dir: str | None = PrivateAttr(default=None)
+
+    def _run(self, prompt: str, model: str | None = None) -> str:
+        cmd = build_survey_cmd(self._config, prompt, model=model)
+        result = _run_pi(cmd, cwd=self._repo_dir)
+        return _format_report(cmd, result)
+
+
 class ExportSessionTool(BaseTool):
     """セッション（JSONL）を永続化する Tool（/export の JSONL 化に相当）。"""
 
@@ -435,10 +490,21 @@ def build_pi_tools(config: OrchestratorConfig | None = None) -> list[BaseTool]:
         RunPiForkTool(),
         CompactContextTool(),
         ExportSessionTool(),
+        RunPiSurveyTool(),
     ]
     for t in tools:
         t._config = config
+        if isinstance(t, RunPiSurveyTool):
+            t._repo_dir = None
     return tools
+
+
+def make_survey_tool(config: OrchestratorConfig | None = None, repo_dir: str | None = None) -> BaseTool:
+    """調査専用 Tool（run_pi_survey）を返す。既存リポジトリを ``repo_dir`` で指定できる。"""
+    tool = RunPiSurveyTool()
+    tool._config = config or OrchestratorConfig()
+    tool._repo_dir = repo_dir
+    return tool
 
 
 def make_pi_single_tool(config: OrchestratorConfig | None = None) -> BaseTool:
