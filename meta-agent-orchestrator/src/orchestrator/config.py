@@ -32,13 +32,25 @@ ENV_PI_THINKING = "PI_THINKING"
 ENV_PI_TRUST = "PI_TRUST"
 
 # ---------------------------------------------------------------------------
-# デフォルト値 (PLAN F-12)
+# デフォルト値 (PLAN F-12 / TASK.md Task 8 で調査した最新モデル 2026 時点)
 # ---------------------------------------------------------------------------
-# 注: モデル ID は保留事項のため調整可能なプレースホルダ。すべて外部から上書きできる。
-DEFAULT_ORCHESTRATOR_MODEL = "deepseek/deepseek-chat"  # コスパ系（Deepseek v4-flash 系に相当）
-DEFAULT_EXEC_MODEL = "anthropic/claude-sonnet-4-5"  # 中〜高性能（コスパ併用可能）
-DEFAULT_QA_MODEL = "anthropic/claude-opus-4-1"  # 高性能（品質生命線）
-DEFAULT_SURVEY_MODEL = "deepseek/deepseek-chat"  # コスパ系（Deepseek v4-flash 系に相当）
+# 注: すべて外部（env / 引数）から上書きできる。コストパフォーマンスを優先。
+#
+# 調査結果（OpenRouter API の実価格、入力/出力 1M トークン当たり）：
+#   - deepseek/deepseek-v4-flash-0731 : $0.08 / $0.18  —— 最安〜激安のフラッシュ系。
+#     計画・要約・ナビゲーション用途（オーケストレータ/調査）に最適（PLAN の
+#     "deepseek v4-flash 系" に相当）。
+#   - deepseek/deepseek-v4-pro-0813   : $0.435 / $0.87 —— 推論・コード能力が高いコスパ系。
+#     実装（実行エージェント）の中〜高性能 + 予算重視に最適。
+#   - anthropic/claude-sonnet-4.6     : $3.0 / $15.0  —— フロンティア級の高品質を
+#     オーパス（$5/$25）より廉価に。QA（品質生命線）のコスパ最良。
+#
+# ※ 実行・QA をさらに高機能にしたければ claude-sonnet-4.6 / claude-opus-4.6 等へ
+#   外部設定で差し替え可能。
+DEFAULT_ORCHESTRATOR_MODEL = "deepseek/deepseek-v4-flash-0731"  # コスパ系（計画・戦略）
+DEFAULT_EXEC_MODEL = "deepseek/deepseek-v4-pro-0813"  # 中〜高性能 + コスパ併用
+DEFAULT_QA_MODEL = "anthropic/claude-sonnet-4.6"  # 高品質 + コスパ最良（検証の生命線）
+DEFAULT_SURVEY_MODEL = "deepseek/deepseek-v4-flash-0731"  # コスパ系（調査）
 
 DEFAULT_PI_PROVIDER = "openrouter"
 DEFAULT_PI_THINKING = True
