@@ -1,0 +1,12 @@
+# Docker ビルドコンテクストから除外するもの（イメージ肥大・秘密漏洩の防止）
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+logs/
+data/
+.env
+.git/
+.gitignore
+Dockerfile.dockerignore
+*.log

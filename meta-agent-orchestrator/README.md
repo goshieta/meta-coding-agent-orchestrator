@@ -27,7 +27,38 @@
 | マネジメント層 | CrewAI（Agent / Task / Crew / Process） |
 | 実行方式 | `Process.HIERARCHICAL`（オーケストレータ = manager） |
 | 実行ツール | pi coding agent（CLI を subprocess で呼ぶ） |
-| コンテナ | Docker |
+| コンテナ | Docker（Task 7 実装済み） |
+
+## コンテナ隔離実行（Task 7）
+
+`run-spec.sh` はホスト側で `python -m orchestrator.container` を呼び、実処理をすべて
+**Docker コンテナ内**で実行します（F-02）。CrewAI マネジメント層と pi の両方がコンテナ内で
+動くため、ホストは汚染されません。
+
+- **Dockerfile**: `node + uv + pi CLI` ベース（既定 `pi-sandbox`、`ARG BASE_IMAGE` で差し替え可）に
+  CrewAI 等を `uv sync` で同梱。
+- **仕様書**: 永続領域 `data/inputs/spec.md` へ退避して参照（ネストした Docker でも安全）。
+- **既存リポジトリ**: 第2引数で `/existing` に **read-only** マウント（読み込みのみ）。
+- **永続化（冪等性）**: ワークスペース・セッション・ログを `data/` -> `/work` に bind mount。
+  `docker rm` / 再起動後も状態を復元。
+- **秘密管理**: モデル割当・`GITHUB_TOKEN`・`OPENROUTER_API_KEY` 等は `docker run` の `-e` で
+  **起動時のみ注入**し、イメージには埋め込まない。
+
+```bash
+./run-spec.sh <spec.md> [existing_repo/] [options]
+# 出力: コンテナID・コンテナ名・データ領域・ログパス
+
+# 補助オプション
+--rebuild           # イメージを再ビルドしてから起動
+--docker-image T     # 使用イメージ（既定: meta-agent-orchestrator:latest）
+--data-dir DIR       # 永続データ領域（既定: <プロジェクト>/data）
+--follow             # コンテナログをフォロー
+--dry-run            # 実行する docker run コマンドを表示するだけ
+--foreground         # フォアグラウンド（-it）で起動
+```
+
+> **Docker-in-Docker 対応**: ネストした Docker でも bind mount が機能するよう、`container.py` が
+> 現在コンテナの bind mount 情報から、デーモンが解決できる実パスを自動変換します。
 
 ## クイックスタート
 
@@ -139,10 +170,15 @@ print(result.survey_report)       # 既存経路の現状レポート（自然�
 ```
 
 - `spec.md`: 仕様書（必須。存在・非空を検証）
-- `existing_repo/`: 既存リポジトリ（任意）
-- オプション: `--orchestrator-model` / `--exec-model` / `--qa-model` / `--survey-model` / `--github-token` / `--log-dir`
+- `existing_repo/`: 既存リポジトリ（任意。コンテナへ read-only マウントして調査に使う）
+- オプション: `--orchestrator-model` / `--exec-model` / `--qa-model` / `--survey-model` /
+  `--github-token` / `--log-dir` / `--rebuild` / `--docker-image` / `--data-dir` / `--follow` / `--dry-run`
 
 仕様書未指定・不存在・空ファイルの場合はエラーメッセージを出して即終了（exit 非0）します。
+起動成功時は**コンテナID・データ領域・ログパス**を出力して戻ります。
+
+> **コンテナ内のパイプライン起動**: `run-spec.sh`（Host）→ `python -m orchestrator.container` が
+> Docker コンテナを起動し、その中の `/app` で `python -m orchestrator`（コンテナ内エントリ）を実行します。
 
 ## 設定（環境変数）
 
@@ -167,19 +203,22 @@ print(result.survey_report)       # 既存経路の現状レポート（自然�
 ```
 meta-agent-orchestrator/
 ├── pyproject.toml            # uv による環境定義（Task 1）
+├── Dockerfile                # コンテナ隔離実行（Task 7）
+├── .dockerignore             # ビルドコンテクスト除外（Task 7）
 ├── README.md                 # 本ファイル
 ├── src/orchestrator/
 │   ├── __init__.py
 │   ├── __main__.py           # python -m orchestrator の入口
 │   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
 │   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
+│   ├── container.py          # コンテナ隔離実行（Task 7）
 │   ├── context.py            # コンテクスト構築（新規・既存）（Task 6）
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   └── pi_tools.py       # pi 連携 CrewAI Tool 群（Task 4）
 │   ├── workspace.py          # 共有ボード・ログ・セッション状態管理（Task 5）
 │   └── main.py               # CLI への薄い委譲エントリ
-├── run-spec.sh               # ワンライナー起動（Task 3）
+├── run-spec.sh               # ワンライナー起動（Task 3 / Task 7 コンテナ起動）
 └── tests/                    # テスト（Task 1〜）
 ```
 
@@ -193,7 +232,7 @@ meta-agent-orchestrator/
 - [x] Task 4: pi 連携 CrewAI Tool 群
 - [x] Task 5: ワークスペース・共有ボード・状態管理
 - [x] Task 6: コンテクスト構築（新規・既存）
-- [ ] Task 7: コンテナ隔離実行
+- [x] Task 7: コンテナ隔離実行
 - [ ] Task 8: CrewAI エージェント群とクルー構成
 - [ ] Task 9: 実装ループ
 - [ ] Task 10: 品質保証（独立 QA クリティック）
