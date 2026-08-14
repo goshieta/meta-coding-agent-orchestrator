@@ -7,6 +7,14 @@
 
 from orchestrator.workspace import Task, TaskStatus, Workspace
 from orchestrator.executor import LoopOptions, LoopResult, TaskOutcome, run_loop
+from orchestrator.deliver import (
+    DeliveryError,
+    DeliveryOptions,
+    DeliveryResult,
+    GitHubClient,
+    deliver,
+    run_delivery,
+)
 from orchestrator.qa import (
     DEFAULT_QA_CRITERIA,
     QAIssue,
@@ -30,6 +38,12 @@ __all__ = [
     "LoopResult",
     "TaskOutcome",
     "run_loop",
+    "DeliveryError",
+    "DeliveryOptions",
+    "DeliveryResult",
+    "GitHubClient",
+    "deliver",
+    "run_delivery",
     "DEFAULT_QA_CRITERIA",
     "QAIssue",
     "QAInspection",

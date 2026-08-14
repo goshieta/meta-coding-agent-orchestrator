@@ -7,7 +7,8 @@
 > **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
 > Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
 > Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/
-> Task 8（クルー構成）/ Task 9（実装ループ）/ Task 10（独立QAクリティック）完了。
+> Task 8（クルー構成）/ Task 9（実装ループ）/ Task 10（独立QAクリティック）/
+> Task 11（GitHub最終納品）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -18,6 +19,7 @@
 - **コンテナ隔離**: 全エージェント・pi プロセスをコンテナ内で稼働（Task 7 実装済み）。
 - **実装ループ**: 共有ボードを依存・優先度順に処理し、pi実行・再試行・compact・commitを行う（Task 9 実装済み）。
 - **品質担保**: 実装セッションから独立したQA piが検証し、PASSのみ `accepted` へ進める。不合格はTask9へ再送（Task 10 実装済み）。
+- **最終納品**: 全タスクのQA通過と最終承認後、GitHubリポジトリ作成・pushを一度だけ実行し、状態を永続化（Task 11 実装済み）。
 - **費用最適化**: 役割別モデル割当を外部設定化（Task 8 でクルーに注入）。
 - **新規・既存両対応**: 既存コードベースの現状把握（Task 6 / Task 8 でクルー化）。
 
@@ -132,6 +134,40 @@ print(qa_report.summary())
 テストでは `verify` とTask9のpi/git runnersを注入できるため、外部pi/APIを起動せずにPASS、FAIL、再実装、
 再検証、QAプロセス障害を検証できます。
 
+## GitHub 最終納品（Task 11 / F-07・F-11）
+
+`deliver.py` の `deliver()` は、共有ボード上の**全タスクが `accepted`** であることを確認し、
+オーケストレータの最終判定（`final_decision`）と人間の最終承認（`approval`）を経て、GitHub APIで
+リポジトリを作成し、成果物の現在のGitリポジトリを一度だけ `push` します。
+
+```python
+from orchestrator import DeliveryOptions, Workspace, deliver
+from orchestrator.config import build_config
+
+workspace = Workspace.open("work/")
+result = deliver(
+    workspace,
+    build_config(),  # GITHUB_TOKEN は環境変数から解決し、状態やログには保存しない
+    DeliveryOptions(owner="example", repo_name="my-project"),
+    approval=lambda: True,  # Task 12のhuman_gateへ接続する箇所
+)
+print(result.summary())
+```
+
+### 冪等性・障害復旧
+
+- `state.json` の `delivery` に `status`、リポジトリURL、作成・push時刻、エラーを保存します。
+- `delivered` 状態ではGitHub APIもpushも再実行せず、`idempotent=True` を返します。
+- リポジトリ作成後にpushが失敗した場合はURLを保持し、次回はリポジトリ作成を繰り返さずpushだけを再試行します。
+- 承認未取得時は `awaiting_approval` で停止し、認証トークン未設定やQA未通過は `blocked` / `failed` として明示します。
+- POSIX環境ではワークスペースのファイルロックで同時実行を直列化します。
+- GitHubトークンはGit remote URLへ埋め込まず、一時的な `http.extraheader` としてGit subprocessへ渡します。
+  `state.json`、`plan.md`、タスクログにはトークンを保存しません。
+- APIの401/403、接続エラー、git push失敗は秘密情報を漏らさない一般化されたエラーとして返し、状態を保持します。
+
+テストではGitHub APIクライアントとGit実行器を注入できるため、実ネットワークや実pushなしで、
+初回納品、二重実行防止、push失敗後の再試行、承認待ち、認証エラーを検証できます。
+
 ## CrewAI エージェント群とクルー構成（Task 8）
 
 `agents/crew.py` はオーケストレータ・実行・QA・調査の各エージェントを定義し、
@@ -184,8 +220,8 @@ uv run pytest tests/
 実装・計画ループの共通基盤。作業ディレクトリを一元管理し、共有ボード・
 タスク別ログ・pi セッションの永続化を担います。
 
-- **共有ボード `plan.md`**: タスク一覧・状態・依存・優先度を人間向けに描画。
-- **状態 `state.json`**: 機械可読な状態（冪等性の要）。再起動時に読み込んで進行を復元。
+- **共有ボード `plan.md`**: タスク一覧・状態・依存・優先度を人間向けに描画。最終納品状態も表示。
+- **状態 `state.json`**: 機械可読な状態（冪等性の要）。再起動時に読み込んで進行を復元。GitHub納品の作成済みURL・push状態も保持。
 - **タスク別ログ**: `logs/<task_id>.log` にタイムスタンプ付きで追記。
 - **pi セッション**: `--session` / `/export` の JSONL を `sessions/` へ永続化し、
   再起動時に復元（冪等性）。
@@ -323,6 +359,7 @@ meta-agent-orchestrator/
 │   ├── context.py            # コンテクスト構築（新規・既存）（Task 6）
 │   ├── executor.py           # 依存順pi実装・再試行・compact・commit（Task 9）
 │   ├── qa.py                 # 独立QA・問題抽出・Task9再送・合否ゲート（Task 10）
+│   ├── deliver.py            # GitHub作成・一回push・納品状態・復旧（Task 11）
 │   ├── git.py                # タスク完了ごとのgit commitヘルパー（Task 9）
 │   ├── tools/
 │   │   ├── __init__.py
@@ -350,6 +387,7 @@ meta-agent-orchestrator/
 - [x] Task 8: CrewAI エージェント群とクルー構成
 - [x] Task 9: 実装ループ
 - [x] Task 10: 品質保証（独立 QA クリティック）
+- [x] Task 11: GitHubアップロードと完了・納品
 - [ ] Task 11: GitHub アップロードと完了・納品
 - [ ] Task 12: 人間インターフェース
 - [ ] Task 13: 統合テスト・最終検証・README 仕上げ

@@ -126,6 +126,7 @@ class Workspace:
 
         self._tasks: list[Task] = []
         self._next_id = 1
+        self._delivery_state: dict[str, object] = {}
 
         if create:
             self._ensure_dirs()
@@ -148,6 +149,7 @@ class Workspace:
         else:
             self._tasks = []
             self._next_id = 1
+            self._delivery_state = {}
             self.save()
 
     # -- タスク管理 --------------------------------------------------------
@@ -228,6 +230,18 @@ class Workspace:
             if t.status is TaskStatus.PLANNED and set(t.dependencies) <= completed_ids
         ]
 
+    # -- 最終納品状態 ------------------------------------------------------
+    @property
+    def delivery_state(self) -> dict[str, object]:
+        """GitHub納品の永続状態を返す（token等の秘密情報は保持しない）。"""
+        return dict(self._delivery_state)
+
+    def set_delivery_state(self, **fields: object) -> dict[str, object]:
+        """納品状態を更新し、state.jsonへ保存する。"""
+        self._delivery_state.update(fields)
+        self.save()
+        return self.delivery_state
+
     # -- ログ --------------------------------------------------------------
     def log_path(self, task_id: int) -> Path:
         """タスク別ログのパス（``logs/<task_id>.log``）。"""
@@ -286,7 +300,11 @@ class Workspace:
         self._ensure_dirs()
         self.state_path.write_text(
             json.dumps(
-                {"next_id": self._next_id, "tasks": [t.to_dict() for t in self._tasks]},
+                {
+                    "next_id": self._next_id,
+                    "tasks": [t.to_dict() for t in self._tasks],
+                    "delivery": self._delivery_state,
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -298,6 +316,8 @@ class Workspace:
         data = json.loads(self.state_path.read_text(encoding="utf-8"))
         self._next_id = int(data.get("next_id", 1))
         self._tasks = [Task.from_dict(d) for d in data.get("tasks", [])]
+        loaded_delivery = data.get("delivery", {})
+        self._delivery_state = dict(loaded_delivery) if isinstance(loaded_delivery, dict) else {}
 
     # -- 共有ボード（plan.md）生成 ----------------------------------------
     def _render_plan(self) -> str:
@@ -339,6 +359,15 @@ class Workspace:
                 lines.append("")
                 lines.append(f"**レポート**: {t.report}")
             lines.append("")
+
+        if self._delivery_state:
+            lines += [
+                "## 最終納品",
+                "",
+                f"- 状態: `{self._delivery_state.get('status', 'unknown')}`",
+                f"- GitHub URL: {self._delivery_state.get('html_url') or self._delivery_state.get('repository_url') or '未作成'}",
+                "",
+            ]
 
         lines += [
             "## 状態遷移",
