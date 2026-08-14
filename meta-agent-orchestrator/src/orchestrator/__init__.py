@@ -7,7 +7,18 @@
 
 from orchestrator.workspace import Task, TaskStatus, Workspace
 from orchestrator.executor import LoopOptions, LoopResult, TaskOutcome, run_loop
-
+from orchestrator.qa import (
+    DEFAULT_QA_CRITERIA,
+    QAIssue,
+    QAInspection,
+    QAOptions,
+    QAReport,
+    build_qa_prompt,
+    parse_qa_report,
+    qa_single,
+    run_qa,
+    run_quality_gate,
+)
 __version__ = "0.1.0"
 
 __all__ = [
@@ -19,4 +30,14 @@ __all__ = [
     "LoopResult",
     "TaskOutcome",
     "run_loop",
+    "DEFAULT_QA_CRITERIA",
+    "QAIssue",
+    "QAInspection",
+    "QAOptions",
+    "QAReport",
+    "build_qa_prompt",
+    "parse_qa_report",
+    "qa_single",
+    "run_qa",
+    "run_quality_gate",
 ]

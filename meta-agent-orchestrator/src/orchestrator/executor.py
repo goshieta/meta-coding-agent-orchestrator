@@ -30,7 +30,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Iterable, Mapping
 
 from orchestrator import git as g
 from orchestrator.config import OrchestratorConfig
@@ -159,6 +159,7 @@ class LoopOptions:
     model: str | None = None            # 実行モデル上書き（既定: config.exec_model）
     steering: Mapping[int, list[str]] | None = None  # task_id -> 進行中 follow-up 指示
     retry_failed: bool = True             # 再起動時に保存済み failed タスクも再試行するか
+    task_ids: Iterable[int] | None = None # 指定時は対象タスクだけを処理
 
     def __post_init__(self) -> None:
         if self.max_attempts < 1:
@@ -405,8 +406,13 @@ def run_loop(
     outcomes: dict[int, TaskOutcome] = {}
     commits: list[g.GitResult] = []
 
+    selected_ids = set(opts.task_ids) if opts.task_ids is not None else None
+
     # ---- 中断（running）タスクの再開（冪等性） ----
-    interrupted = [t for t in workspace.tasks if t.status is TaskStatus.RUNNING]
+    interrupted = [
+        t for t in workspace.tasks
+        if t.status is TaskStatus.RUNNING and (selected_ids is None or t.id in selected_ids)
+    ]
     for task in sorted(interrupted, key=lambda t: (t.priority, t.id)):
         outcome = _process_task(
             workspace, config, opts, task, repo_dir,
@@ -417,7 +423,10 @@ def run_loop(
 
     # ---- 前回実行で failed のまま保存されたタスクを fork で再試行 ----
     if opts.retry_failed:
-        persisted_failed = [t for t in workspace.tasks if t.status is TaskStatus.FAILED]
+        persisted_failed = [
+            t for t in workspace.tasks
+            if t.status is TaskStatus.FAILED and (selected_ids is None or t.id in selected_ids)
+        ]
         for task in sorted(persisted_failed, key=lambda t: (t.priority, t.id)):
             workspace.transition(task.id, TaskStatus.RUNNING)
             outcome = _process_task(
@@ -433,6 +442,8 @@ def run_loop(
     # 新しく ready になった高優先度タスクを、低優先度の独立タスクより先に処理できる。
     while True:
         ready = workspace.ready_tasks()
+        if selected_ids is not None:
+            ready = [t for t in ready if t.id in selected_ids]
         if not ready:
             break
         task = sorted(ready, key=lambda t: (t.priority, t.id))[0]

@@ -7,7 +7,7 @@
 > **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
 > Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
 > Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/
-> Task 8（クルー構成）/ Task 9（実装ループ）完了。
+> Task 8（クルー構成）/ Task 9（実装ループ）/ Task 10（独立QAクリティック）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -17,7 +17,7 @@
 - **ワンライナー起動**: `run-spec.sh <spec.md> [existing_repo/]` で開始（実行基盤実装済み、全体統合は後続）。
 - **コンテナ隔離**: 全エージェント・pi プロセスをコンテナ内で稼働（Task 7 実装済み）。
 - **実装ループ**: 共有ボードを依存・優先度順に処理し、pi実行・再試行・compact・commitを行う（Task 9 実装済み）。
-- **品質担保**: 独立 QA クリティック通過のみ完了へ（Task 10 で統合予定）。
+- **品質担保**: 実装セッションから独立したQA piが検証し、PASSのみ `accepted` へ進める。不合格はTask9へ再送（Task 10 実装済み）。
 - **費用最適化**: 役割別モデル割当を外部設定化（Task 8 でクルーに注入）。
 - **新規・既存両対応**: 既存コードベースの現状把握（Task 6 / Task 8 でクルー化）。
 
@@ -98,6 +98,39 @@ print(result.summary())
 
 `run_loop()` は pi 実行関数と git runner を注入できるため、piを起動しない単体テストや
 障害時の再試行テストも可能です。
+
+## 品質保証ゲート（Task 10 / F-06）
+
+`qa.py` の `run_qa()` は、`done` タスクを `qa` へ遷移させ、実装エージェントのセッションを継続しない
+独立した `run_pi_single` 検証を実行します。QA用モデルは `OrchestratorConfig.qa_model` から解決されます。
+
+QAプロンプトは以下の基準を必ず要求します。
+
+- 仕様書の機能・入出力・エラー処理の充足
+- テストの実行結果と不足テスト
+- 可読性・責務分離・保守性
+- セキュリティ・秘密情報・回帰リスク
+
+piレポートは `判定: PASS` / `判定: FAIL` と構造化された問題リストを返します。判定が欠落した場合は安全側に
+`FAIL` とし、問題を `QAIssue` として保持します。PASSの場合だけ `qa → accepted` へ遷移します。
+FAILの場合は、問題をsteering指示へ変換してTask9の `run_loop()` に対象タスクだけを再送し、最大ラウンド数まで
+修正後の独立QAを繰り返します。検証結果・再送・判定はタスク別ログとレポートに保存されます。
+
+```python
+from orchestrator import QAOptions, Workspace, run_qa
+from orchestrator.config import build_config
+
+workspace = Workspace.open("work/")
+qa_report = run_qa(
+    workspace,
+    build_config(),
+    QAOptions(repo_dir="work/", spec_file="work/context/spec.md", max_rounds=2),
+)
+print(qa_report.summary())
+```
+
+テストでは `verify` とTask9のpi/git runnersを注入できるため、外部pi/APIを起動せずにPASS、FAIL、再実装、
+再検証、QAプロセス障害を検証できます。
 
 ## CrewAI エージェント群とクルー構成（Task 8）
 
@@ -289,6 +322,7 @@ meta-agent-orchestrator/
 │   ├── container.py          # コンテナ隔離実行（Task 7）
 │   ├── context.py            # コンテクスト構築（新規・既存）（Task 6）
 │   ├── executor.py           # 依存順pi実装・再試行・compact・commit（Task 9）
+│   ├── qa.py                 # 独立QA・問題抽出・Task9再送・合否ゲート（Task 10）
 │   ├── git.py                # タスク完了ごとのgit commitヘルパー（Task 9）
 │   ├── tools/
 │   │   ├── __init__.py
@@ -315,7 +349,7 @@ meta-agent-orchestrator/
 - [x] Task 7: コンテナ隔離実行
 - [x] Task 8: CrewAI エージェント群とクルー構成
 - [x] Task 9: 実装ループ
-- [ ] Task 10: 品質保証（独立 QA クリティック）
+- [x] Task 10: 品質保証（独立 QA クリティック）
 - [ ] Task 11: GitHub アップロードと完了・納品
 - [ ] Task 12: 人間インターフェース
 - [ ] Task 13: 統合テスト・最終検証・README 仕上げ
