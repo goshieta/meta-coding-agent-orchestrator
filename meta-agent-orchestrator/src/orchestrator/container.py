@@ -72,6 +72,7 @@ ENV_PASSTHROUGH_PREFIXES = (
 ENV_GITHUB_TOKEN = "GITHUB_TOKEN"
 ENV_PI_SESSION_DIR = "PI_SESSION_DIR"
 ENV_PI_TRUST = "PI_TRUST"
+ENV_IN_CONTAINER = "ORCHESTRATOR_IN_CONTAINER"
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +215,8 @@ def build_env_args(
         if key.startswith(ENV_PASSTHROUGH_PREFIXES) and value:
             env.setdefault(key, value)
     env[ENV_PI_TRUST] = env.get(ENV_PI_TRUST) or host_env.get("PI_TRUST") or DEFAULT_PI_TRUST
+    # コンテナ内 CLI は開始通知ではなく統合パイプラインを実行する。
+    env[ENV_IN_CONTAINER] = "1"
 
     args: list[str] = []
     for key, value in env.items():
@@ -226,7 +229,7 @@ def build_mount_args(repo_abs: Path | None, data_abs: Path) -> list[str]:
 
     - 永続データ ``data/`` -> ``/work``: ワークスペース・セッション・ログ・
       ``inputs/spec.md``（退避した仕様書）を保持し、再起動後も復元（冪等性）。
-    - 既存リポジトリ: ``/existing`` (read-only, 任意)。
+    - 既存リポジトリ: ``/existing`` (任意)。調査時の pi ツールは読み取り専用だが、実装ループが変更・commitできるようマウント自体は writable。
 
     ※ マウント元は Docker-in-Docker でもデーモンが解決できる実パスへ変換する。
     ※ 仕様書はファイル単体の bind mount だとネスト Docker で空ディレクトリ化する
@@ -236,7 +239,9 @@ def build_mount_args(repo_abs: Path | None, data_abs: Path) -> list[str]:
     args = ["-v", f"{data_src}:{IN_WORK_DIR}"]
     if repo_abs:
         repo_src = resolve_daemon_path(repo_abs)
-        args += ["-v", f"{repo_src}:{IN_REPO_PATH}:ro"]
+        # 調査 pi は --tools read,grep,find,ls で読み取り専用に制限する。一方、
+        # 実装 pi が既存案件を修正して commit できるよう mount は writable とする。
+        args += ["-v", f"{repo_src}:{IN_REPO_PATH}"]
     return args
 
 

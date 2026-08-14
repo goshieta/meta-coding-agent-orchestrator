@@ -4,18 +4,14 @@
 [pi](https://github.com/earendil-labs/pi-coding-agent) のセッション・コンテクスト・品質を自律管理し、
 人間の介入なしに最終成果物を GitHub リポジトリとして完成投稿まで行う開発オーケストレーション中間層です。
 
-> **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
-> Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
-> Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/
-> Task 8（クルー構成）/ Task 9（実装ループ）/ Task 10（独立QAクリティック）/
-> Task 11（GitHub最終納品）/ Task 12（人間インターフェース）完了。
-> 本ファイルは後続タスクの進行に合わせて随時更新されます。
+> **ステータス**: Task 1〜12 の実装、および Task 13（統合テスト・最終検証）完了。
+> `uv run pytest tests/` で全テストが通過する状態を維持します。
 
 ---
 
 ## 概要
 
-- **ワンライナー起動**: `run-spec.sh <spec.md> [existing_repo/]` で開始（実行基盤実装済み、全体統合は後続）。
+- **ワンライナー起動**: `run-spec.sh <spec.md> [existing_repo/]` で開始。コンテナ内では context → plan → execute → 独立 QA → 人間承認付き納品までを再開可能な統合パイプラインとして実行します。
 - **コンテナ隔離**: 全エージェント・pi プロセスをコンテナ内で稼働（Task 7 実装済み）。
 - **実装ループ**: 共有ボードを依存・優先度順に処理し、pi実行・再試行・compact・commitを行う（Task 9 実装済み）。
 - **品質担保**: 実装セッションから独立したQA piが検証し、PASSのみ `accepted` へ進める。不合格はTask9へ再送（Task 10 実装済み）。
@@ -245,6 +241,28 @@ print(crew.manager_agent.role)      # オーケストレータ（manager）
 > コード接触は pi Tool を介してのみ行います。`allow_code_execution` は非推奨のため明示指定せず、
 > デフォルト（無効）に依拠しています。
 
+## 統合パイプライン（Task 13 / F-01〜F-08）
+
+コンテナ内の `python -m orchestrator` は、次の段階を一度の起動で接続します。
+
+1. `context.py`: 仕様書を保存し、新規なら初期コンテクストを生成。既存案件なら pi の読み取り専用調査を実行。
+2. `planner.py`: 共有ボードに冪等な初期タスクを作成（再起動時は既存計画を再利用）。
+3. `executor.py`: pi で実装し、失敗時の fork、compact、タスク単位 commit を実行。
+4. `qa.py`: 独立 pi セッションで検証し、FAIL は実装ループへ戻す。
+5. `deliver.py`: 全タスクが `accepted` で人間承認済みの場合だけ GitHub を一度だけ作成・push。
+
+ホスト側の CLI テストや `--dry-run` は Docker / pi / OpenRouter を起動しません。実行コンテナには
+`ORCHESTRATOR_IN_CONTAINER=1` が注入され、この統合経路が有効になります。QA 不合格、承認待ち、
+認証エラー、強制停止は `state.json` と `plan.md` に保存され、例外で状態を失わず再開できます。
+
+```bash
+# 外部 API を使わない統合テスト
+uv run pytest tests/
+
+# 実処理（pi と OpenRouter が必要。GITHUB_TOKEN が無い場合は納品待ち/失敗状態で停止）
+./run-spec.sh spec.md --data-dir ./data --follow
+```
+
 ## クイックスタート
 
 前提: [uv](https://docs.astral.sh/uv/) がインストールされていること。
@@ -399,6 +417,8 @@ meta-agent-orchestrator/
 ├── README.md                 # 本ファイル
 ├── src/orchestrator/
 │   ├── __init__.py
+│   ├── planner.py             # 仕様書/調査レポートから冪等な共有計画を作成（F-04 / Task 13）
+│   ├── pipeline.py            # context → plan → execute → QA → delivery の統合接続
 │   ├── __main__.py           # python -m orchestrator の入口
 │   ├── config.py             # 設定管理（ORCHESTRATOR_MODEL 等 / Task 2）
 │   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
@@ -437,4 +457,4 @@ meta-agent-orchestrator/
 - [x] Task 10: 品質保証（独立 QA クリティック）
 - [x] Task 11: GitHubアップロードと完了・納品
 - [x] Task 12: 人間インターフェース
-- [ ] Task 13: 統合テスト・最終検証・README 仕上げ
+- [x] Task 13: 統合テスト・最終検証・README 仕上げ

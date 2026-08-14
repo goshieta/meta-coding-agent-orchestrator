@@ -107,16 +107,39 @@ def _default_log_dir() -> Path:
 
 
 def run_pipeline(config: OrchestratorConfig, spec_path: Path, repo_path: Path | None, log_dir: Path) -> None:
-    """後続パイプラインを開始する（現在は開始通知とログパスの出力のみ）。
+    """パイプラインを開始する。
 
-    以降のタスク（Task 4-12）でコンテクスト構築・計画・実装などの実処理が
-    ここから呼び出される想定のフックである。
+    ホスト側の軽量 CLI 呼び出しでは開始情報だけを表示する。一方、コンテナ内では
+    ``ORCHESTRATOR_IN_CONTAINER`` が設定され、context → plan → execute → QA →
+    delivery の再開可能な統合パイプラインを実行する。これにより仕様検証だけを
+    行う既存の CLI テストや dry-run は外部 API / pi を起動しない。
     """
-    # TODO(Task 4-12): ここでコンテクスト構築・計画・実装パイプラインを起動する。
     print(f"[orchestrator] 仕様書: {spec_path}")
     print(f"[orchestrator] 既存リポジトリ: {repo_path if repo_path else '(なし)'}")
     print(f"[orchestrator] パイプラインを開始しました（config={config.orchestrator_model} 他）")
     print(f"[orchestrator] ログパス: {log_dir}")
+
+    if os.getenv("ORCHESTRATOR_IN_CONTAINER") != "1":
+        return
+
+    from orchestrator.pipeline import run_pipeline as run_integrated_pipeline
+    from orchestrator.workspace import Workspace
+
+    # コンテナの --log-dir は /work/logs。ログの親を共有ワークスペースとして使う。
+    workdir = log_dir.parent if log_dir.name == "logs" else log_dir
+    result = run_integrated_pipeline(
+        spec_path,
+        Workspace.open(workdir),
+        config,
+        repo_path=repo_path,
+        log_dir=log_dir,
+    )
+    print("[orchestrator] 統合パイプライン結果:")
+    print(result.summary())
+    # 承認待ち・QA不合格は安全な停止状態として保存済みであり、例外にせず
+    # 再起動／HumanGate.resume() で続行できる。納品失敗も同様に状態を保持する。
+    if result.delivery and result.delivery.ok:
+        print("[orchestrator] 最終納品まで完了しました")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -46,6 +46,7 @@ class TestBuildEnvArgs:
         assert kv[container.ENV_PI_SESSION_DIR] == container.IN_SESSION_DIR
         assert kv["PI_PROVIDER"] == "openrouter"
         assert kv["PI_THINKING"] == "true"
+        assert kv[container.ENV_IN_CONTAINER] == "1"
 
     def test_host_creds_passthrough(self, config):
         host = {"OPENROUTER_API_KEY": "sk-X", "AGENT_QA_MODEL": "host/qa"}
@@ -82,7 +83,8 @@ class TestBuildMountArgs:
         repo = tmp_path / "repo"
         args = container.build_mount_args(repo, data)
         joined = " ".join(args)
-        assert f"{repo}:{container.IN_REPO_PATH}:ro" in joined
+        assert f"{repo}:{container.IN_REPO_PATH}" in joined
+        assert f"{repo}:{container.IN_REPO_PATH}:ro" not in joined
 
     def test_daemon_path_resolution_called(self, monkeypatch, tmp_path):
         calls: list[str] = []

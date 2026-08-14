@@ -102,6 +102,7 @@ def test_build_context_existing_creates_survey_report(tmp_path) -> None:
     assert captured["cwd"] == str(repo.resolve())
     assert "--tools" in argv
     assert argv[argv.index("--tools") + 1] == "read,grep,find,ls"
+    assert argv[argv.index("--model") + 1] == OrchestratorConfig().survey_model
 
 
 def test_build_survey_prompt_is_readonly_instruction() -> None:

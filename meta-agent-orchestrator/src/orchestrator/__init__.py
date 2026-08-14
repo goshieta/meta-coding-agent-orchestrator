@@ -24,6 +24,8 @@ from orchestrator.deliver import (
     deliver,
     run_delivery,
 )
+from orchestrator.planner import PlanResult, create_plan
+from orchestrator.pipeline import PipelineResult, run_pipeline as run_integrated_pipeline
 from orchestrator.qa import (
     DEFAULT_QA_CRITERIA,
     QAIssue,
@@ -47,6 +49,10 @@ __all__ = [
     "LoopResult",
     "TaskOutcome",
     "run_loop",
+    "PlanResult",
+    "create_plan",
+    "PipelineResult",
+    "run_integrated_pipeline",
     "HumanAnswer",
     "HumanGate",
     "HumanGateError",

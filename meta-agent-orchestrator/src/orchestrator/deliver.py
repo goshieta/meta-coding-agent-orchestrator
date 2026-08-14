@@ -51,6 +51,8 @@ def _now() -> str:
 class DeliveryOptions:
     """最終納品の制御設定。"""
 
+    # 新規案件は workspace、既存案件は実装対象リポジトリを push 対象にする。
+    repo_dir: str | Path | None = None
     repo_name: str | None = None
     owner: str | None = None
     private: bool = False
@@ -257,6 +259,8 @@ def deliver(
     opts = options or DeliveryOptions()
     with _delivery_lock(workspace):
         state = _state(workspace)
+        push_dir = str(opts.repo_dir or workspace.workdir)
+        Path(push_dir).mkdir(parents=True, exist_ok=True)
         if state.get("status") == STATUS_DELIVERED:
             return DeliveryResult(
                 status=STATUS_DELIVERED,
@@ -309,15 +313,15 @@ def deliver(
                 )
 
             _save_state(workspace, status=STATUS_PUSHING, updated_at=_now(), last_error=None)
-            remote_result = _git_run(["remote", "get-url", opts.remote], str(workspace.workdir), runner=git_runner)
+            remote_result = _git_run(["remote", "get-url", opts.remote], push_dir, runner=git_runner)
             if remote_result.get("returncode") != 0:
-                _git_ok(_git_run(["remote", "add", opts.remote, repository_url], str(workspace.workdir), runner=git_runner))
+                _git_ok(_git_run(["remote", "add", opts.remote, repository_url], push_dir, runner=git_runner))
             elif (remote_result.get("stdout") or "").strip() != repository_url:
-                _git_ok(_git_run(["remote", "set-url", opts.remote, repository_url], str(workspace.workdir), runner=git_runner))
+                _git_ok(_git_run(["remote", "set-url", opts.remote, repository_url], push_dir, runner=git_runner))
 
             _git_ok(_git_run(
                 ["push", "--set-upstream", opts.remote, f"HEAD:{opts.branch}"],
-                str(workspace.workdir), token=token, runner=git_runner,
+                push_dir, token=token, runner=git_runner,
             ))
             _save_state(
                 workspace,

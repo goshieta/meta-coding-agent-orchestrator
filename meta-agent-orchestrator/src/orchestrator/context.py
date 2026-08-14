@@ -154,7 +154,8 @@ def run_survey(
     """
     repo = Path(repo_path)
     prompt = prompt if prompt is not None else build_survey_prompt()
-    cmd = pt.build_survey_cmd(config, prompt)
+    # 調査役割のモデルを明示し、実行役のモデルへ誤フォールバックしない。
+    cmd = pt.build_survey_cmd(config, prompt, model=config.survey_model)
     runner = run_pi or pt._run_pi
     result = runner(cmd, cwd=str(repo), timeout=SURVEY_TIMEOUT)
 
