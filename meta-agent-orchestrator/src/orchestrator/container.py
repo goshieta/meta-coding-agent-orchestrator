@@ -52,7 +52,7 @@ DEFAULT_IMAGE = "meta-agent-orchestrator:latest"
 IN_APP_DIR = "/app"            # アプリ本体（uv プロジェクト / 仮想環境）
 IN_WORK_DIR = "/work"          # 永続データ（bind mount 先）
 IN_SPEC_PATH = f"{IN_WORK_DIR}/inputs/spec.md"  # 仕様書（data/inputs/ に退避したもの）
-IN_REPO_PATH = "/existing"      # 既存リポジトリ（read-only）
+IN_REPO_PATH = "/existing"      # 既存リポジトリ（調査piはread-only tool制限）
 IN_LOG_DIR = f"{IN_WORK_DIR}/logs"
 IN_SESSION_DIR = f"{IN_WORK_DIR}/sessions"
 IN_INPUTS_DIR = f"{IN_WORK_DIR}/inputs"
@@ -249,8 +249,9 @@ def prepare_inputs(spec_abs: Path, repo_abs: Path | None, data_abs: Path) -> Pat
     """仕様書を永続データ領域（``data/inputs/spec.md``）へ退避し、パスを返す。
 
     永続領域はホスト・Docker デーモン双方から見えるため、仕様書を確実に
-    コンテナ内で参照できる。既存リポジトリは巨大なため read-only bind mount で
-    対応し、ここではコピーしない。
+    コンテナ内で参照できる。既存リポジトリは巨大なため bind mount で対応し、ここでは
+    コピーしない。調査時の pi は read-only tool allowlist を使い、実装時は変更・commit
+    できる必要があるため、mount 自体は writable とする。
     """
     inputs_dir = data_abs / "inputs"
     inputs_dir.mkdir(parents=True, exist_ok=True)

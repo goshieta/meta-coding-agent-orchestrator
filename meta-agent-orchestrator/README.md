@@ -39,7 +39,7 @@
 - **Dockerfile**: `node + uv + pi CLI` ベース（既定 `pi-sandbox`、`ARG BASE_IMAGE` で差し替え可）に
   CrewAI 等を `uv sync` で同梱。
 - **仕様書**: 永続領域 `data/inputs/spec.md` へ退避して参照（ネストした Docker でも安全）。
-- **既存リポジトリ**: 第2引数で `/existing` に **read-only** マウント（読み込みのみ）。
+- **既存リポジトリ**: 第2引数で `/existing` にマウント。調査 pi は `read,grep,find,ls` の read-only tool 制限を使い、実装 pi が修正・commitできるよう mount 自体は writable。
 - **永続化（冪等性）**: ワークスペース・セッション・ログを `data/` -> `/work` に bind mount。
   `docker rm` / 再起動後も状態を復元。
 - **秘密管理**: モデル割当・`GITHUB_TOKEN`・`OPENROUTER_API_KEY` 等は `docker run` の `-e` で
@@ -373,7 +373,7 @@ print(result.survey_report)       # 既存経路の現状レポート（自然�
 ```
 
 - `spec.md`: 仕様書（必須。存在・非空を検証）
-- `existing_repo/`: 既存リポジトリ（任意。コンテナへ read-only マウントして調査に使う）
+- `existing_repo/`: 既存リポジトリ（任意。調査は read-only tool 制限、実装は同じ mount 上で実行）
 - オプション: `--orchestrator-model` / `--exec-model` / `--qa-model` / `--survey-model` /
   `--github-token` / `--log-dir` / `--rebuild` / `--docker-image` / `--data-dir` / `--follow` / `--dry-run`
 
