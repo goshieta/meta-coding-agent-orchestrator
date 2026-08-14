@@ -7,6 +7,15 @@
 
 from orchestrator.workspace import Task, TaskStatus, Workspace
 from orchestrator.executor import LoopOptions, LoopResult, TaskOutcome, run_loop
+from orchestrator.human_gate import (
+    HumanAnswer,
+    HumanGate,
+    HumanGateError,
+    HumanGateResult,
+    HumanQuestion,
+    force_stop,
+    resume,
+)
 from orchestrator.deliver import (
     DeliveryError,
     DeliveryOptions,
@@ -38,6 +47,13 @@ __all__ = [
     "LoopResult",
     "TaskOutcome",
     "run_loop",
+    "HumanAnswer",
+    "HumanGate",
+    "HumanGateError",
+    "HumanGateResult",
+    "HumanQuestion",
+    "force_stop",
+    "resume",
     "DeliveryError",
     "DeliveryOptions",
     "DeliveryResult",

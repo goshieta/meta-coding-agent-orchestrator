@@ -8,7 +8,7 @@
 > Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
 > Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/
 > Task 8（クルー構成）/ Task 9（実装ループ）/ Task 10（独立QAクリティック）/
-> Task 11（GitHub最終納品）完了。
+> Task 11（GitHub最終納品）/ Task 12（人間インターフェース）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
@@ -20,6 +20,7 @@
 - **実装ループ**: 共有ボードを依存・優先度順に処理し、pi実行・再試行・compact・commitを行う（Task 9 実装済み）。
 - **品質担保**: 実装セッションから独立したQA piが検証し、PASSのみ `accepted` へ進める。不合格はTask9へ再送（Task 10 実装済み）。
 - **最終納品**: 全タスクのQA通過と最終承認後、GitHubリポジトリ作成・pushを一度だけ実行し、状態を永続化（Task 11 実装済み）。
+- **人間ゲート**: 仕様質問への回答と強制停止・安全な再開を状態付きで管理（Task 12 実装済み）。
 - **費用最適化**: 役割別モデル割当を外部設定化（Task 8 でクルーに注入）。
 - **新規・既存両対応**: 既存コードベースの現状把握（Task 6 / Task 8 でクルー化）。
 
@@ -153,6 +154,52 @@ result = deliver(
 )
 print(result.summary())
 ```
+
+## 人間インターフェース（Task 12 / F-08）
+
+`human_gate.py` の `HumanGate` は、人間へ仕様の不明点を提出し、回答または強制停止を
+受け付ける最小限の接点です。質問・回答履歴、待機状態、停止理由は `state.json` の
+`human_gate` に保存され、`plan.md` にも状態が表示されます。
+
+```python
+from orchestrator import HumanGate, Workspace
+
+workspace = Workspace.open("work/")
+gate = HumanGate(workspace)
+
+# 質問だけ保存して、外部UIや後続処理から回答する
+question = gate.submit_question(
+    "認証方式をOAuthにしてよいですか？",
+    context="仕様書に認証方式の記載がありません",
+)
+answer = gate.wait_for_answer(question.question_id)
+
+# 実行中に停止する場合。状態保存後に戻るため、セッションやタスクは破棄されない
+stop = gate.handle_command("/stop")
+# 再起動後: HumanGate(Workspace.open("work/")).resume()
+```
+
+### 質問・回答
+
+- `submit_question()` は質問を `awaiting_answer` として永続化し、重複した質問を防ぎます。
+- `answer_question()` または `wait_for_answer()` で回答を保存し、処理を続行可能にします。
+- `ask()` は提出と回答待ちをまとめた対話APIです。stdinだけでなく `input_fn` を注入できるため、
+  CLI、Web UI、テストから利用できます。
+- Task11の最終承認は `HumanGate.request_approval` をcallbackとして渡せます。
+  `yes`、`はい`、`承認`、`approve` のみ承認し、それ以外は納品を拒否します。
+
+### 強制停止・再開
+
+- `stop`、`force-stop`、`halt`、`abort`、`/stop`、`停止`、`強制停止` などを受け付けます。
+- EOF / Ctrl-Cも安全停止として扱います。
+- 停止前に `state.json` と `plan.md` を保存し、状態を `stopped` にします。
+- 保存済みのタスク状態、piセッションID、ログ、質問履歴は削除しません。
+- `resume()` または `resume(workspace)` で停止状態を解除します。未回答の質問があれば
+  `awaiting_answer` へ戻し、回答後に続行できます。
+- 停止・再開は冪等で、プロセスを再起動しても `Workspace.open()` が状態を復元します。
+
+テストでは入力関数を注入し、質問→回答→続行、停止→状態保存→再起動→再開、納品承認を
+実際のstdinやGitHubへ接続せず検証しています。
 
 ### 冪等性・障害復旧
 
@@ -360,6 +407,7 @@ meta-agent-orchestrator/
 │   ├── executor.py           # 依存順pi実装・再試行・compact・commit（Task 9）
 │   ├── qa.py                 # 独立QA・問題抽出・Task9再送・合否ゲート（Task 10）
 │   ├── deliver.py            # GitHub作成・一回push・納品状態・復旧（Task 11）
+│   ├── human_gate.py          # 質問・回答・強制停止・再開（Task 12）
 │   ├── git.py                # タスク完了ごとのgit commitヘルパー（Task 9）
 │   ├── tools/
 │   │   ├── __init__.py
@@ -388,6 +436,5 @@ meta-agent-orchestrator/
 - [x] Task 9: 実装ループ
 - [x] Task 10: 品質保証（独立 QA クリティック）
 - [x] Task 11: GitHubアップロードと完了・納品
-- [ ] Task 11: GitHub アップロードと完了・納品
-- [ ] Task 12: 人間インターフェース
+- [x] Task 12: 人間インターフェース
 - [ ] Task 13: 統合テスト・最終検証・README 仕上げ

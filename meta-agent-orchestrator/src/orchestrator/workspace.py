@@ -127,6 +127,7 @@ class Workspace:
         self._tasks: list[Task] = []
         self._next_id = 1
         self._delivery_state: dict[str, object] = {}
+        self._human_gate_state: dict[str, object] = {}
 
         if create:
             self._ensure_dirs()
@@ -150,6 +151,7 @@ class Workspace:
             self._tasks = []
             self._next_id = 1
             self._delivery_state = {}
+            self._human_gate_state = {}
             self.save()
 
     # -- タスク管理 --------------------------------------------------------
@@ -242,6 +244,18 @@ class Workspace:
         self.save()
         return self.delivery_state
 
+    # -- 人間ゲート状態 ----------------------------------------------------
+    @property
+    def human_gate_state(self) -> dict[str, object]:
+        """質問・回答・停止状態を返す（token等の認証情報は保持しない）。"""
+        return dict(self._human_gate_state)
+
+    def set_human_gate_state(self, **fields: object) -> dict[str, object]:
+        """人間ゲート状態を更新し、state.jsonとplan.mdへ保存する。"""
+        self._human_gate_state.update(fields)
+        self.save()
+        return self.human_gate_state
+
     # -- ログ --------------------------------------------------------------
     def log_path(self, task_id: int) -> Path:
         """タスク別ログのパス（``logs/<task_id>.log``）。"""
@@ -304,6 +318,7 @@ class Workspace:
                     "next_id": self._next_id,
                     "tasks": [t.to_dict() for t in self._tasks],
                     "delivery": self._delivery_state,
+                    "human_gate": self._human_gate_state,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -318,6 +333,8 @@ class Workspace:
         self._tasks = [Task.from_dict(d) for d in data.get("tasks", [])]
         loaded_delivery = data.get("delivery", {})
         self._delivery_state = dict(loaded_delivery) if isinstance(loaded_delivery, dict) else {}
+        loaded_human_gate = data.get("human_gate", {})
+        self._human_gate_state = dict(loaded_human_gate) if isinstance(loaded_human_gate, dict) else {}
 
     # -- 共有ボード（plan.md）生成 ----------------------------------------
     def _render_plan(self) -> str:
@@ -359,6 +376,16 @@ class Workspace:
                 lines.append("")
                 lines.append(f"**レポート**: {t.report}")
             lines.append("")
+
+        if self._human_gate_state:
+            lines += [
+                "## 人間ゲート",
+                "",
+                f"- 状態: `{self._human_gate_state.get('status', 'unknown')}`",
+                f"- 質問: {self._human_gate_state.get('active_question_id') or 'なし'}",
+                f"- 停止理由: {self._human_gate_state.get('stop_reason') or 'なし'}",
+                "",
+            ]
 
         if self._delivery_state:
             lines += [
