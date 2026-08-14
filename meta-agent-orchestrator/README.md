@@ -6,16 +6,18 @@
 
 > **ステータス**: Task 1（雛形・環境構築）/ Task 2（設定管理）/ Task 3（CLI・仕様書検証）/
 > Task 4（pi 連携 CrewAI Tool 群）/ Task 5（ワークスペース・共有ボード・状態管理）/
-> Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/ Task 8（クルー構成）完了。
+> Task 6（コンテクスト構築：新規・既存）/ Task 7（コンテナ隔離実行）/
+> Task 8（クルー構成）/ Task 9（実装ループ）完了。
 > 本ファイルは後続タスクの進行に合わせて随時更新されます。
 
 ---
 
 ## 概要
 
-- **ワンライナー起動**: `run-spec.sh <spec.md> [existing_repo/]` で開始（未実装）。
+- **ワンライナー起動**: `run-spec.sh <spec.md> [existing_repo/]` で開始（実行基盤実装済み、全体統合は後続）。
 - **コンテナ隔離**: 全エージェント・pi プロセスをコンテナ内で稼働（Task 7 実装済み）。
-- **品質担保**: 独立 QA クリティック通過のみ完了へ（未実装）。
+- **実装ループ**: 共有ボードを依存・優先度順に処理し、pi実行・再試行・compact・commitを行う（Task 9 実装済み）。
+- **品質担保**: 独立 QA クリティック通過のみ完了へ（Task 10 で統合予定）。
 - **費用最適化**: 役割別モデル割当を外部設定化（Task 8 でクルーに注入）。
 - **新規・既存両対応**: 既存コードベースの現状把握（Task 6 / Task 8 でクルー化）。
 
@@ -59,6 +61,43 @@
 
 > **Docker-in-Docker 対応**: ネストした Docker でも bind mount が機能するよう、`container.py` が
 > 現在コンテナの bind mount 情報から、デーモンが解決できる実パスを自動変換します。
+
+## 実装ループ（Task 9 / F-05）
+
+`executor.py` の `run_loop()` は、Task 5 の共有ボードを読み取り、依存関係と優先度を考慮して
+タスクを順番に処理します。コードの読み書き・検証は pi に委譲し、executor は指示・レポート・
+状態・ログ・git commit を管理します。
+
+```python
+from orchestrator import LoopOptions, Workspace, run_loop
+from orchestrator.config import build_config
+
+workspace = Workspace.open("work/")
+config = build_config()
+result = run_loop(
+    workspace,
+    config,
+    LoopOptions(
+        repo_dir="work/",
+        spec_file="work/context/spec.md",
+        max_attempts=3,
+    ),
+)
+print(result.summary())
+```
+
+主な動作:
+
+- 新規タスクは `run_pi_single`、保存済みセッションは `run_pi_continue` で実行。
+- pi が失敗した場合は既存セッションを `run_pi_fork` して再試行（セッションが無い場合は単発再試行）。
+- `LoopOptions.steering` により、実行中の follow-up 指示を `run_pi_continue` で注入。
+- レポートが `compact_threshold` を超えた場合、`compact_context`（`/compact` 相当）を実行。
+- 成功タスクごとに `git add -A` / `git commit` を実行し、コミット失敗時はタスクを `failed` に保持。
+- 中断時に `running` だったタスクは、保存済みセッションから再開。
+- `LoopResult.summary()` が成功/失敗、試行回数、セッション、コミット数を自然言語で返す。
+
+`run_loop()` は pi 実行関数と git runner を注入できるため、piを起動しない単体テストや
+障害時の再試行テストも可能です。
 
 ## CrewAI エージェント群とクルー構成（Task 8）
 
@@ -249,6 +288,8 @@ meta-agent-orchestrator/
 │   ├── cli.py                # CLI入口・引数解析・仕様書検証（Task 3）
 │   ├── container.py          # コンテナ隔離実行（Task 7）
 │   ├── context.py            # コンテクスト構築（新規・既存）（Task 6）
+│   ├── executor.py           # 依存順pi実装・再試行・compact・commit（Task 9）
+│   ├── git.py                # タスク完了ごとのgit commitヘルパー（Task 9）
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   └── pi_tools.py       # pi 連携 CrewAI Tool 群（Task 4）
@@ -273,7 +314,7 @@ meta-agent-orchestrator/
 - [x] Task 6: コンテクスト構築（新規・既存）
 - [x] Task 7: コンテナ隔離実行
 - [x] Task 8: CrewAI エージェント群とクルー構成
-- [ ] Task 9: 実装ループ
+- [x] Task 9: 実装ループ
 - [ ] Task 10: 品質保証（独立 QA クリティック）
 - [ ] Task 11: GitHub アップロードと完了・納品
 - [ ] Task 12: 人間インターフェース

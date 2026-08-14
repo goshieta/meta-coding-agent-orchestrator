@@ -6,7 +6,17 @@
 """
 
 from orchestrator.workspace import Task, TaskStatus, Workspace
+from orchestrator.executor import LoopOptions, LoopResult, TaskOutcome, run_loop
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "Workspace", "Task", "TaskStatus"]
+__all__ = [
+    "__version__",
+    "Workspace",
+    "Task",
+    "TaskStatus",
+    "LoopOptions",
+    "LoopResult",
+    "TaskOutcome",
+    "run_loop",
+]
