@@ -4,21 +4,42 @@
 # 全エージェント（CrewAI マネジメント層）と pi プロセスをコンテナ内で稼働させ、
 # ホストを非汚染に保つための隔離実行環境。
 #
-# ベースイメージは「node + uv + pi CLI」を同梱したものを使う。
-# 既定は手元 / CI で使用する pi-sandbox だが、`ARG BASE_IMAGE` で差し替え可能
-# （例: node:24-bookworm-slim に `npm i -g @earendil-works/pi-coding-agent` と
-#       `uv` を仕込んだ独自ベース）。
+# ベースイメージ: node:24-bookworm-slim に uv + pi CLI をインストール。
+# (pi.dev/docs/latest/containerization の Plain Docker パターンに準拠)
 #
 # セキュリティ: トークン等の秘密情報はイメージに埋め込まず、`docker run` 時の
 # `-e` で起動時のみ注入する（F-02）。
-ARG BASE_IMAGE=pi-sandbox
-FROM ${BASE_IMAGE}
 
-# uv（ベースで ~/.local/bin/uv にインストール済みの場合）を PATH へ
+FROM node:24-bookworm-slim AS base
+
+# --- システム依存 (bash, git, ripgrep, curl, python3, pip) ---
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    ripgrep \
+    python3 \
+    python3-pip \
+    python3-venv \
+  && rm -rf /var/lib/apt/lists/*
+
+# --- uv のインストール (Astral 公式インストーラ) ---
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
-# 再現性・速度のための uv 設定
+
+# --- pi CLI のインストール ---
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+# --- uv 設定 (再現性・速度) ---
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
+
+# ============================================================
+# 本番イメージ
+# ============================================================
+FROM base
 
 WORKDIR /app
 

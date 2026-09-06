@@ -57,24 +57,34 @@ def _openrouter_api_key() -> str | None:
 
 
 def build_pi_llm(config: OrchestratorConfig, model: str) -> LLM:
-    """設定のモデル割当から OpenRouter 経由の litellm ``LLM`` を生成する。
+    """OpenRouter 経由の CrewAI ``LLM`` を生成する。
 
-    モデル ID（例: ``deepseek/deepseek-v4-flash-0731``）へ litellm が OpenRouter として
-    解釈する ``openrouter/`` プレフィックスを付与し、OpenRouter API キーは環境変数から
-    読む（値は出力しない）。ネイティブプロバイダ（anthropic 等）の追加インストールを
-    不要にするため、必ず OpenRouter 経由に統一する。
+    CrewAI >= 0.86 はモデル名中の ``openrouter/`` プレフィックスをネイティブ
+    OpenRouter プロバイダとして解釈し、API キーが必須となる。本関数では
+    代わりに OpenAI 互換プロバイダ（``provider="openai"``）＋ OpenRouter の
+    ベース URL を用いることで、追加のインストール（litellm 等）なしに
+    OpenRouter 経由のモデル呼び出しを実現する。
+
+    OpenRouter API キーは環境変数から読み、値は一切出力しない。
 
     Args:
-        config: 設定（provider 解決）。
-        model: 役割別モデル ID。
+        config: 設定（provider 解決。直接は使わずモデル ID のみ使用）。
+        model: 役割別モデル ID（例: ``deepseek/deepseek-v4-flash-0731``）。
 
     Returns:
-        CrewAI ``LLM`` インスタンス（provider=openrouter）。構成時に API は呼ばない。
+        CrewAI ``LLM`` インスタンス（provider=openai, base_url=OpenRouter）。
+        構成時に API は呼ばない。
     """
-    routed = model if model.startswith("openrouter/") else f"openrouter/{model}"
+    # CrewAI >= 0.86 のネイティブ OpenRouter プロバイダは API キー必須のため
+    # OpenAI 互換プロバイダ（provider="openai"）＋ OpenRouter のベース URL で代用
+    clean_model = model.removeprefix("openrouter/")
     return LLM(
-        model=routed,
+        model=clean_model,
         api_key=_openrouter_api_key(),
+        base_url=OPENROUTER_BASE_URL,
+        # OpenAI 互換プロバイダで OpenRouter にルーティング。
+        # ネイティブ OpenRouter / DeepSeek 等の解析を回避するため明示指定。
+        provider="openai",
     )
 
 

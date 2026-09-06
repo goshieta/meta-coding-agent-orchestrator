@@ -65,14 +65,17 @@ class TestLLM:
     def test_build_pi_llm_uses_openrouter(self, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         llm = build_pi_llm(OrchestratorConfig(), "deepseek/deepseek-v4-flash-0731")
-        assert llm.provider == "openrouter"
+        # provider="openai" + base_url="https://openrouter.ai/api/v1" で OpenRouter 経由
+        assert llm.base_url == "https://openrouter.ai/api/v1"
         assert llm.model == "deepseek/deepseek-v4-flash-0731"
+        assert llm.provider == "openai"
 
     def test_build_pi_llm_accepts_existing_prefix(self, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         llm = build_pi_llm(OrchestratorConfig(), "openrouter/deepseek/x")
         assert llm.model == "deepseek/x"
-        assert llm.provider == "openrouter"
+        assert llm.provider == "openai"
+        assert llm.base_url == "https://openrouter.ai/api/v1"
 
     def test_openrouter_base_url(self):
         assert OPENROUTER_BASE_URL == "https://openrouter.ai/api/v1"
@@ -93,8 +96,10 @@ class TestAgents:
     def test_orchestrator_uses_orchestrator_model(self):
         cfg = OrchestratorConfig()
         agent = build_orchestrator_agent(cfg)
+        # provider="openai" + base_url="https://openrouter.ai/api/v1" で OpenRouter 経由
         assert agent.llm.model == cfg.orchestrator_model
-        assert agent.llm.provider == "openrouter"
+        assert agent.llm.base_url == "https://openrouter.ai/api/v1"
+        assert agent.llm.provider == "openai"
         assert agent.allow_code_execution is False
 
     def test_exec_uses_exec_model_and_tools(self):
